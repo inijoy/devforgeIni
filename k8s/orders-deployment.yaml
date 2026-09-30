@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  labels:
+    app: orders-service
+
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: orders-service
+
+  template:
+    metadata:
+      labels:
+        app: orders-service
+
+    spec:
+      containers:
+        - name: orders-service
+          image: ghcr.io/inijoy/orders-service:8c8c6652fa209c8f2451f322e5a76c274934cd58
+          ports:
+            - containerPort: 8000
