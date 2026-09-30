@@ -1,5 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: orders-service
   labels:
@@ -20,6 +21,21 @@ spec:
     spec:
       containers:
         - name: orders-service
-          image: ghcr.io/inijoy/orders-service:8c8c6652fa209c8f2451f322e5a76c274934cd58
+          image: ghcr.io/inijoy/orders-service:0.2.0
+
           ports:
             - containerPort: 8000
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
