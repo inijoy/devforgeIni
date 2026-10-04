@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orders-service
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/inijoy/devforgeIni.git
+    targetRevision: main
+    path: helm/orders-service
+    helm:
+      releaseName: orders-service
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
