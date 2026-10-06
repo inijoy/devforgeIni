@@ -40,7 +40,13 @@ ingress:
 httpRoute:
   enabled: false
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
 
 livenessProbe:
   httpGet:
@@ -57,10 +63,10 @@ readinessProbe:
   periodSeconds: 5
 
 autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
 
 volumes: []
 volumeMounts: []
