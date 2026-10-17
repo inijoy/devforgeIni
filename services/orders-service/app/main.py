@@ -67,3 +67,17 @@ def create_order(order: OrderCreate):
     orders.append(new_order)
 
     return new_order
+
+
+@app.get("/test-cpu")
+def test_cpu():
+    result = 0
+
+    for i in range(1, 500_001):
+        result += i * i
+
+    return {
+        "message": "CPU test completed",
+        "iterations": 500_000,
+        "result": result,
+    }
