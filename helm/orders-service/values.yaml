@@ -3,7 +3,7 @@ replicaCount: 3
 image:
   repository: ghcr.io/inijoy/orders-service
   pullPolicy: IfNotPresent
-  tag: "8820d901bdc2bbdc353920c9109d63043624f4c0"
+  tag: "b3951c30ac8bd1e5894751ad71f507ef97874dfb"
 
 imagePullSecrets: []
 nameOverride: ""
