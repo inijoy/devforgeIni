@@ -11,19 +11,29 @@ fullnameOverride: ""
 
 serviceAccount:
   create: true
-  automount: true
+  automount: false
   annotations: {}
   name: ""
 
 podAnnotations: {}
 podLabels: {}
 
-podSecurityContext: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 8000
 
 ingress:
@@ -68,8 +78,13 @@ autoscaling:
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
 
-volumes: []
-volumeMounts: []
+volumes:
+  - name: tmp
+    emptyDir: {}
+
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
 
 nodeSelector: {}
 
