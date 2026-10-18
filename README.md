@@ -1,28 +1,10 @@
 # DevForge Platform
 
-DevForge is a cloud-native developer platform project designed to demonstrate
-reliable, secure, observable, and automated application delivery using modern
-platform engineering practices.
+DevForge is a hands-on cloud-native platform engineering project demonstrating automated application delivery, Kubernetes deployment, GitOps, container security, and operational practices.
 
-The project is being developed around a small microservices architecture and
-will progressively introduce:
-
-* Python/FastAPI services
-* Automated testing
-* Docker
-* GitHub Actions
-* GitHub Container Registry
-* Kubernetes
-* Helm
-* Terraform
-* GitOps with Argo CD
-* Observability with OpenTelemetry and Prometheus
-* Reliability engineering and SLOs
-* Security and vulnerability management
+The project uses a FastAPI Orders Service to demonstrate the delivery lifecycle, from source code and automated tests to container publishing and Kubernetes deployment.
 
 ## Architecture
-
-Current delivery flow:
 
 ```text
 Developer
@@ -35,50 +17,67 @@ GitHub Actions
    |
    +--> Automated Tests
    |
-   +--> Docker Build
+   +--> Docker Image Build
             |
             v
      GitHub Container Registry
             |
             v
-       Deployable Image
+      Immutable Image Tag
+            |
+            v
+       Helm Chart in Git
+            |
+            v
+          Argo CD
+            |
+            v
+     Kubernetes Deployment
+            |
+            +--> Service
+            +--> Health Probes
+            +--> Resource Requests/Limits
+            +--> Horizontal Pod Autoscaler
 ```
 
-Kubernetes deployment will be introduced as the next stage of the platform.
+Argo CD monitors the Git repository and deploys the Helm chart. Application changes are synchronized manually in the current configuration.
 
-## Services
+## Technology Stack
 
-### Orders Service
+- **Application:** Python, FastAPI, Pytest
+- **Containers:** Docker
+- **CI/CD:** GitHub Actions
+- **Container registry:** GitHub Container Registry (GHCR)
+- **Orchestration:** Kubernetes
+- **Packaging:** Helm
+- **GitOps:** Argo CD
+- **Scaling and resource metrics:** Kubernetes Metrics Server and Horizontal Pod Autoscaler
+- **Infrastructure as Code:** Terraform scaffold
 
-Path: `services/orders-service`
+## Orders Service
 
-Technology:
+Path: `services/orders-service/`
 
-* Python
-* FastAPI
-* Pytest
-* Docker
+The service exposes the following endpoints:
 
-Current API endpoints:
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/` | Service root |
+| GET | `/health` | Health check |
+| GET | `/orders` | List orders |
+| GET | `/orders/{order_id}` | Retrieve an order |
+| POST | `/orders` | Create an order |
 
-* `GET /health`
-* `GET /orders`
-* `GET /orders/{order_id}`
-* `POST /orders`
+Order data is maintained in application memory; persistent database storage is not currently implemented.
 
-## Running Locally
+## Run Locally
 
-Create and activate the Python virtual environment:
+From the repository root, create and activate a virtual environment:
 
 ```powershell
 cd services/orders-service
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```powershell
 python -m pip install -r requirements.txt
 ```
 
@@ -88,82 +87,120 @@ Run the tests:
 python -m pytest -v
 ```
 
-Start the service:
+Start the application:
 
 ```powershell
 python -m uvicorn app.main:app --reload
 ```
 
-The API will be available at:
+Useful URLs:
 
-`http://127.0.0.1:8000`
-
-Health check:
-
-`http://127.0.0.1:8000/health`
-
-Interactive API documentation:
-
-`http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+- Interactive API documentation: `http://127.0.0.1:8000/docs`
 
 ## Docker
 
-Build the image:
+Build the image from the repository root:
 
 ```powershell
-cd services/orders-service
-docker build -t devforge/orders-service:0.1.0 .
+docker build -t devforge/orders-service:local .\services\orders-service
 ```
 
 Run the container:
 
 ```powershell
-docker run --name orders-service -p 8000:8000 devforge/orders-service:0.1.0
+docker run --rm -p 8000:8000 devforge/orders-service:local
 ```
 
-Health check:
+Test the health endpoint:
 
 ```powershell
-curl.exe http://127.0.0.1:8000/health
+Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-## CI/CD
+The Docker image runs as a non-root user with UID/GID `10001`.
 
-GitHub Actions automatically runs when changes are pushed to `main` or a pull request targets `main`.
+## CI/CD and Container Registry
 
-The current pipeline:
+GitHub Actions runs automated tests and builds and publishes the Orders Service image to GHCR when changes are pushed to `main` or a pull request targets `main`.
 
-1. Checks out the repository
-2. Installs Python 3.14
-3. Installs dependencies
-4. Runs automated tests
-5. Builds the Docker image
-6. Authenticates to GitHub Container Registry
-7. Publishes the image to GHCR
+Published images use Git commit SHA tags:
 
-Container images are tagged using the Git commit SHA.
+```text
+ghcr.io/inijoy/orders-service:<commit-sha>
+```
 
-Example:
+This supports traceability between application source, CI execution, and deployed image versions.
 
-`ghcr.io/inijoy/orders-service:<commit-sha>`
+## Kubernetes Deployment
 
-This provides traceability between source code, CI execution, and the deployable container artifact.
+The application is deployed to Kubernetes using the Helm chart at:
 
-## Container Registry
+`helm/orders-service/`
 
-The Orders Service image is published to GitHub Container Registry:
+Argo CD Application configuration:
 
-`ghcr.io/inijoy/orders-service`
+`argocd/application-orders-service.yaml`
+
+The deployment includes:
+
+- Three configured baseline replicas
+- Kubernetes health probes
+- CPU and memory requests and limits
+- A Horizontal Pod Autoscaler configured for 3–6 replicas with a 70% CPU utilization target
+- A ClusterIP Service
+- A read-only container root filesystem
+- Non-root execution and a RuntimeDefault seccomp profile
+
+The HPA configuration and metrics availability have been checked. Scale-up under load has not yet been demonstrated.
+
+### Access the application locally
+
+Start a port-forward:
+
+```powershell
+kubectl port-forward svc/orders-service 8000:8000 -n default
+```
+
+In another terminal:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+## Security Baseline
+
+The deployed container security settings include:
+
+- Non-root user: UID/GID `10001`
+- `allowPrivilegeEscalation: false`
+- `readOnlyRootFilesystem: true`
+- All Linux capabilities dropped
+- `RuntimeDefault` seccomp profile
+- Automatic service-account token mounting disabled
+- A dedicated writable `/tmp` volume
+
+The Helm chart passes `helm lint`.
+
+## Terraform Status
+
+The `terraform/` directory is currently a scaffold. Terraform validation succeeds, but the current configuration does not provision cloud infrastructure. No infrastructure provisioning should be inferred from this scaffold.
+
+## Current Limitations and Next Steps
+
+- Orders are stored in memory rather than a persistent database.
+- HPA scale-up has not been demonstrated under load.
+- Full application observability with Prometheus/OpenTelemetry dashboards and alerting is not yet implemented.
+- Terraform infrastructure provisioning is not implemented.
+- Argo CD synchronization is manual.
+
+Possible future improvements include persistent storage, demonstrated autoscaling, application metrics and alerting, vulnerability scanning, and Terraform-managed infrastructure.
 
 ## Engineering Principles
 
-DevForge is being built around the following principles:
-
-* Automation over manual operations
-* Infrastructure as Code
-* Least-privilege security
-* Immutable deployment artifacts
-* Observability by design
-* Reliability through automation and testing
-* Self-service developer workflows
-* Clear ownership of services throughout their lifecycle
+- Automation over repetitive manual work
+- Immutable, traceable container images
+- GitOps-based deployment management
+- Least-privilege container security
+- Resource limits and health checks
+- Clear operational procedures and honest verification of results
