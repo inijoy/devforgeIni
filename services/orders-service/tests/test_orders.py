@@ -42,6 +42,7 @@ def test_get_order():
 
     assert data["id"] == 1
 
+
 def test_get_nonexistent_order():
     response = client.get("/orders/999")
 
@@ -59,4 +60,11 @@ def test_create_order_with_invalid_quantity():
         },
     )
 
-    assert response.status_code == 422    
+    assert response.status_code == 422
+
+
+def test_metrics_endpoint():
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text

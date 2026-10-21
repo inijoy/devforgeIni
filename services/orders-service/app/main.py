@@ -1,11 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 
 
 app = FastAPI(
     title="DevForge Orders Service",
     description="Orders microservice for the DevForge Internal Developer Platform",
     version="0.2.0",
+)
+
+
+# Expose HTTP request metrics for Prometheus.
+Instrumentator().instrument(app).expose(
+    app,
+    endpoint="/metrics",
+    include_in_schema=False,
 )
 
 
