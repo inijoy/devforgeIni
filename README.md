@@ -186,15 +186,100 @@ The Helm chart passes `helm lint`.
 
 The `terraform/` directory is currently a scaffold. Terraform validation succeeds, but the current configuration does not provision cloud infrastructure. No infrastructure provisioning should be inferred from this scaffold.
 
+## Observability and Monitoring
+
+The platform uses Prometheus and Grafana to monitor the Orders Service and Kubernetes workloads.
+
+### Monitoring Stack
+
+- **Prometheus:** Collects and stores application and infrastructure metrics.
+- **Prometheus Operator:** Manages Prometheus monitoring resources.
+- **ServiceMonitor:** Discovers and scrapes the Orders Service metrics endpoint.
+- **Grafana:** Provides dashboards for visualizing application performance.
+- **Alertmanager:** Deployed as part of the Prometheus monitoring stack.
+
+### Application Metrics
+
+The FastAPI Orders Service exposes Prometheus metrics through the `/metrics` endpoint.
+
+The application uses `prometheus-fastapi-instrumentator` and `prometheus-client` for instrumentation.
+
+Prometheus successfully discovers and scrapes all three Orders Service replicas through the configured ServiceMonitor.
+
+### Grafana Dashboard
+
+Dashboard: **DevForge Orders Service Monitoring**
+
+The dashboard provides visibility into API performance through the following panels:
+
+- **API Response Time (p95):** Tracks the 95th percentile response time.
+- **API Request Rate:** Displays the rate of incoming API requests.
+- **HTTP Response Status Groups:** Shows HTTP response status groups.
+
+Example PromQL queries:
+
+**API request rate:**
+
+```promql
+sum by (handler) (
+  rate(http_requests_total[5m])
+)
+```
+
+**95th percentile API response time:**
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le, handler) (
+    rate(http_request_duration_seconds_bucket[5m])
+  )
+)
+```
+
+**HTTP response status groups:**
+
+```promql
+count by (status) (http_requests_total)
+```
+
+### Access Monitoring Interfaces
+
+**Prometheus**
+
+Start port-forwarding:
+
+```powershell
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+```
+
+Access: `http://localhost:9090`
+
+**Grafana**
+
+Start port-forwarding:
+
+```powershell
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+```
+
+Access: `http://localhost:3000`
+
 ## Current Limitations and Next Steps
 
-- Orders are stored in memory rather than a persistent database.
-- HPA scale-up has not been demonstrated under load.
-- Full application observability with Prometheus/OpenTelemetry dashboards and alerting is not yet implemented.
-- Terraform infrastructure provisioning is not implemented.
+- Orders are stored in application memory rather than a persistent database.
+- HPA scale-up has been configured but has not yet been demonstrated under load.
+- Alertmanager is deployed, but application-specific alert rules and notification delivery have not yet been demonstrated.
+- Terraform infrastructure provisioning is not implemented; the current Terraform directory remains a scaffold.
 - Argo CD synchronization is manual.
 
-Possible future improvements include persistent storage, demonstrated autoscaling, application metrics and alerting, vulnerability scanning, and Terraform-managed infrastructure.
+### Future Improvements
+
+- Implement persistent database storage.
+- Demonstrate horizontal autoscaling under load.
+- Configure application-specific alert rules and notification delivery.
+- Add container vulnerability scanning.
+- Implement Terraform-managed infrastructure.
 
 ## Engineering Principles
 
