@@ -152,7 +152,7 @@ The deployment includes:
 - A read-only container root filesystem
 - Non-root execution and a RuntimeDefault seccomp profile
 
-The HPA configuration and metrics availability have been checked. Scale-up under load has not yet been demonstrated.
+The HPA configuration and metrics availability have been verified. During a controlled load test, CPU utilization reached 109%, and the Horizontal Pod Autoscaler increased the Orders Service replicas from 3 to 5. The configured range is 3–6 replicas, with a target CPU utilization of 70%.
 
 ### Access the application locally
 
@@ -268,7 +268,7 @@ Access: `http://localhost:3000`
 ## Current Limitations and Next Steps
 
 - Orders are stored in application memory rather than a persistent database.
-- HPA scale-up has been configured but has not yet been demonstrated under load.
+- HPA scale-up has been demonstrated under controlled load. Further validation of scale-down behaviour remains outstanding.
 - Alertmanager is deployed, but application-specific alert rules and notification delivery have not yet been demonstrated.
 - Terraform infrastructure provisioning is not implemented; the current Terraform directory remains a scaffold.
 - Argo CD synchronization is manual.

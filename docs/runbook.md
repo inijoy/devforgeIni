@@ -103,7 +103,9 @@ Configured HPA settings:
 - Maximum replicas: 6
 - CPU utilization target: 70%
 
-The HPA is configured and metrics availability has been checked. Do not assume scale-up has occurred unless the observed replica count and metrics confirm it.
+The HPA configuration and metrics availability have been verified. During a controlled load test, CPU utilization reached 109%, and the Horizontal Pod Autoscaler increased the Orders Service replicas from 3 to 5. The configured range is 3–6 replicas, with a target CPU utilization of 70%.
+
+Scale-down behaviour has not yet been independently verified.
 
 ## 6. Validate Helm Changes
 
@@ -161,7 +163,102 @@ Confirm the final Argo CD state and deployed image before considering the change
 
 The patch requests a sync; it does not guarantee that the deployment will succeed. Check pod status and logs if the rollout fails.
 
-## 8. Troubleshooting
+## 8. Prometheus and Grafana Monitoring
+
+DevForge uses Prometheus and Grafana to monitor the Orders Service and Kubernetes workloads.
+
+### 8.1 Check Monitoring Components
+
+Check the monitoring pods:
+
+```powershell
+kubectl get pods -n monitoring
+```
+
+Check the Prometheus ServiceMonitor:
+
+```powershell
+kubectl get servicemonitor -n monitoring
+```
+
+Check the Orders Service monitoring target configuration:
+
+```powershell
+kubectl describe servicemonitor orders-service -n monitoring
+```
+
+### 8.2 Access Prometheus
+
+Start port-forwarding:
+
+```powershell
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+```
+
+Open:
+
+`http://localhost:9090`
+
+In Prometheus, check the target status and confirm that the Orders Service replicas are being scraped.
+
+### 8.3 Access Grafana
+
+Start port-forwarding in another terminal:
+
+```powershell
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+```
+
+Open:
+
+`http://localhost:3000`
+
+Navigate to the saved dashboard:
+
+**DevForge Orders Service Monitoring**
+
+The dashboard contains:
+
+- API Response Time (p95)
+- API Request Rate
+- HTTP Response Status Groups
+
+### 8.4 Useful Prometheus Queries
+
+API request rate:
+
+```promql
+sum by (handler) (
+  rate(http_requests_total[5m])
+)
+```
+
+95th percentile API response time:
+
+```promql
+histogram_quantile(
+  0.95,
+  sum by (le, handler) (
+    rate(http_request_duration_seconds_bucket[5m])
+  )
+)
+```
+
+HTTP response status groups:
+
+```promql
+count by (status) (http_requests_total)
+```
+
+### 8.5 Monitoring Verification
+
+The Orders Service exposes application metrics through `/metrics`. Prometheus discovers the service through the configured ServiceMonitor.
+
+The monitoring target was verified with all three Orders Service replicas reporting as healthy and available for scraping.
+
+Alertmanager is deployed as part of the monitoring stack. Application-specific alert rules and notification delivery have not yet been verified.
+
+## 9. Troubleshooting
 
 ### Application is unhealthy
 
@@ -192,7 +289,7 @@ The patch requests a sync; it does not guarantee that the deployment will succee
 4. Check sustained CPU utilization against the configured target.
 5. Record observed replica counts before claiming a successful scale-up test.
 
-## 9. Security Verification
+## 10. Security Verification
 
 Check the pod security context:
 
@@ -216,10 +313,10 @@ kubectl get serviceaccount orders-service -n default -o yaml
 
 Confirm that automatic token mounting is disabled.
 
-## 10. Operational Boundaries
+## 11. Operational Boundaries
 
 - Order data is held in application memory and is not persistent.
 - Terraform is currently a scaffold and does not provision infrastructure.
-- HPA scale-up has not been demonstrated under load.
-- Full Prometheus/OpenTelemetry application monitoring and alerting are not yet implemented.
+- HPA scale-up has been demonstrated under controlled load; scale-down behaviour remains to be independently verified.
+- Prometheus scraping and the Grafana dashboard have been verified. Application-specific alert rules and notification delivery remain outstanding.
 - Validate changes before synchronizing them through Argo CD.
