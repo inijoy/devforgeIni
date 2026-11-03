@@ -25,3 +25,5 @@ Thumbs.db
 *.tfstate.*
 crash.log
 crash.*.log
+# Local monitoring backup
+monitoring-values-backup.yaml

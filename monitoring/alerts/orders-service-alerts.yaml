@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: devforge-orders-service-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: devforge.orders.service
+      rules:
+        - alert: DevForgeOrdersServiceUnavailable
+          expr: 'kube_deployment_status_replicas_available{namespace="default",deployment="orders-service"} < 1'
+          for: 1m
+          labels:
+            severity: critical
+            app: orders-service
+          annotations:
+            summary: "DevForge Orders Service is unavailable"
+            description: "The Orders Service deployment has fewer than one available replica for more than one minute."

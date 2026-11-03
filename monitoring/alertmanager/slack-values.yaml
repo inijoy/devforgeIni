@@ -1,0 +1,5 @@
+alertmanager:
+  alertmanagerSpec:
+    configSecret: alertmanager-slack-config
+    secrets:
+      - alertmanager-slack-webhook
