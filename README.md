@@ -1,8 +1,8 @@
 # DevForge Platform
 
-DevForge is a hands-on cloud-native platform engineering project demonstrating automated application delivery, Kubernetes deployment, GitOps, container security, and operational practices.
+DevForge is a hands-on cloud-native platform engineering project demonstrating application development, containerization, Kubernetes orchestration, GitOps-based delivery, observability, alerting, and infrastructure-as-code foundations.
 
-The project uses a FastAPI Orders Service to demonstrate the delivery lifecycle, from source code and automated tests to container publishing and Kubernetes deployment.
+The project uses a FastAPI Orders Service to demonstrate the software delivery lifecycle, from source code and automated testing to container publishing, Kubernetes deployment, monitoring, and operational alerting.
 
 ## Architecture
 
@@ -34,10 +34,28 @@ GitHub Actions
             v
      Kubernetes Deployment
             |
-            +--> Service
+            +--> Orders Service
             +--> Health Probes
             +--> Resource Requests/Limits
             +--> Horizontal Pod Autoscaler
+            |
+            v
+       Prometheus
+            |
+            +--> Application Metrics
+            +--> Kubernetes Metrics
+            +--> Alert Rules
+            |
+            v
+        Alertmanager
+            |
+            v
+       Slack Notifications
+
+        Grafana
+            |
+            +--> Application Dashboards
+            +--> Kubernetes Dashboards
 ```
 
 Argo CD monitors the Git repository and deploys the Helm chart. Application changes are synchronized manually in the current configuration.
@@ -47,18 +65,21 @@ Argo CD monitors the Git repository and deploys the Helm chart. Application chan
 - **Application:** Python, FastAPI, Pytest
 - **Containers:** Docker
 - **CI/CD:** GitHub Actions
-- **Container registry:** GitHub Container Registry (GHCR)
+- **Container Registry:** GitHub Container Registry (GHCR)
 - **Orchestration:** Kubernetes
 - **Packaging:** Helm
 - **GitOps:** Argo CD
-- **Scaling and resource metrics:** Kubernetes Metrics Server and Horizontal Pod Autoscaler
+- **Scaling:** Kubernetes Metrics Server and Horizontal Pod Autoscaler
+- **Observability:** Prometheus and Grafana
+- **Alerting:** PrometheusRule and Alertmanager
+- **Notifications:** Slack Incoming Webhooks
 - **Infrastructure as Code:** Terraform scaffold
 
 ## Orders Service
 
-Path: `services/orders-service/`
+Application path: `services/orders-service/`
 
-The service exposes the following endpoints:
+The FastAPI Orders Service exposes the following endpoints:
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -67,8 +88,9 @@ The service exposes the following endpoints:
 | GET | `/orders` | List orders |
 | GET | `/orders/{order_id}` | Retrieve an order |
 | POST | `/orders` | Create an order |
+| GET | `/metrics` | Expose Prometheus metrics |
 
-Order data is maintained in application memory; persistent database storage is not currently implemented.
+Order data is maintained in application memory. Persistent database storage is not currently implemented.
 
 ## Run Locally
 
@@ -97,6 +119,7 @@ Useful URLs:
 
 - Health check: `http://127.0.0.1:8000/health`
 - Interactive API documentation: `http://127.0.0.1:8000/docs`
+- Metrics: `http://127.0.0.1:8000/metrics`
 
 ## Docker
 
@@ -138,21 +161,39 @@ The application is deployed to Kubernetes using the Helm chart at:
 
 `helm/orders-service/`
 
+### Argo CD GitOps Verification
+
+Argo CD manages the Orders Service deployment using the Helm chart stored in the GitHub repository.
+
+The Argo CD dashboard confirmed:
+
+- Application health: Healthy.
+- Synchronization status: Synced.
+- Last synchronization: Sync OK.
+- Git branch: `main`.
+- Deployment resources: Service, ServiceAccount, Deployment, Horizontal Pod Autoscaler, ReplicaSets and Pods.
+
+Automatic synchronization is disabled; changes are synchronized manually.
+
+Screenshots:
+- `41-argocd-orders-service-healthy-synced.png`
+- `42-argocd-orders-service-resource-tree.png`
+
 Argo CD Application configuration:
 
 `argocd/application-orders-service.yaml`
 
 The deployment includes:
 
-- Three configured baseline replicas
-- Kubernetes health probes
-- CPU and memory requests and limits
-- A Horizontal Pod Autoscaler configured for 3–6 replicas with a 70% CPU utilization target
-- A ClusterIP Service
-- A read-only container root filesystem
-- Non-root execution and a RuntimeDefault seccomp profile
+- Three configured baseline replicas.
+- Kubernetes health probes.
+- CPU and memory requests and limits.
+- A Horizontal Pod Autoscaler configured for 3–6 replicas with a 70% CPU utilization target.
+- A ClusterIP Service.
+- A read-only container root filesystem.
+- Non-root execution and a RuntimeDefault seccomp profile.
 
-The HPA configuration and metrics availability have been verified. During a controlled load test, CPU utilization reached 109%, and the Horizontal Pod Autoscaler increased the Orders Service replicas from 3 to 5. The configured range is 3–6 replicas, with a target CPU utilization of 70%.
+During a controlled load test, CPU utilization reached 109%, and the Horizontal Pod Autoscaler increased the Orders Service replicas from 3 to 5.
 
 ### Access the application locally
 
@@ -172,19 +213,15 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 
 The deployed container security settings include:
 
-- Non-root user: UID/GID `10001`
-- `allowPrivilegeEscalation: false`
-- `readOnlyRootFilesystem: true`
-- All Linux capabilities dropped
-- `RuntimeDefault` seccomp profile
-- Automatic service-account token mounting disabled
-- A dedicated writable `/tmp` volume
+- Non-root user: UID/GID `10001`.
+- `allowPrivilegeEscalation: false`.
+- `readOnlyRootFilesystem: true`.
+- All Linux capabilities dropped.
+- `RuntimeDefault` seccomp profile.
+- Automatic service-account token mounting disabled.
+- A dedicated writable `/tmp` volume.
 
 The Helm chart passes `helm lint`.
-
-## Terraform Status
-
-The `terraform/` directory is currently a scaffold. Terraform validation succeeds, but the current configuration does not provision cloud infrastructure. No infrastructure provisioning should be inferred from this scaffold.
 
 ## Observability and Monitoring
 
@@ -195,28 +232,33 @@ The platform uses Prometheus and Grafana to monitor the Orders Service and Kuber
 - **Prometheus:** Collects and stores application and infrastructure metrics.
 - **Prometheus Operator:** Manages Prometheus monitoring resources.
 - **ServiceMonitor:** Discovers and scrapes the Orders Service metrics endpoint.
-- **Grafana:** Provides dashboards for visualizing application performance.
-- **Alertmanager:** Deployed as part of the Prometheus monitoring stack.
+- **Grafana:** Provides dashboards for application and Kubernetes performance.
+- **Alertmanager:** Handles alert notifications and routing.
+
+Prometheus successfully discovers and scrapes all three Orders Service replicas through the configured ServiceMonitor.
 
 ### Application Metrics
 
 The FastAPI Orders Service exposes Prometheus metrics through the `/metrics` endpoint.
 
-The application uses `prometheus-fastapi-instrumentator` and `prometheus-client` for instrumentation.
+Instrumentation uses:
 
-Prometheus successfully discovers and scrapes all three Orders Service replicas through the configured ServiceMonitor.
+- `prometheus-fastapi-instrumentator`
+- `prometheus-client`
 
-### Grafana Dashboard
+### Grafana Dashboards
 
-Dashboard: **DevForge Orders Service Monitoring**
+The project includes the following monitoring dashboards:
 
-The dashboard provides visibility into API performance through the following panels:
+**DevForge - Orders Service API Performance**
 
-- **API Response Time (p95):** Tracks the 95th percentile response time.
-- **API Request Rate:** Displays the rate of incoming API requests.
-- **HTTP Response Status Groups:** Shows HTTP response status groups.
+- API Response Time (p95).
+- API Request Rate.
+- HTTP Response Status Groups.
 
-Example PromQL queries:
+Additional Kubernetes dashboards provide visibility into cluster and workload metrics, including resource utilization.
+
+### Example PromQL Queries
 
 **API request rate:**
 
@@ -247,8 +289,6 @@ count by (status) (http_requests_total)
 
 **Prometheus**
 
-Start port-forwarding:
-
 ```powershell
 kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
 ```
@@ -257,35 +297,108 @@ Access: `http://localhost:9090`
 
 **Grafana**
 
-Start port-forwarding:
-
 ```powershell
 kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
 ```
 
 Access: `http://localhost:3000`
 
+## Alerting and Reliability
+
+Prometheus alert rules are defined using Kubernetes `PrometheusRule` resources.
+
+Alert configuration:
+
+`monitoring/alerts/orders-service-alerts.yaml`
+
+### Application Availability Alert
+
+The project implements the alert:
+
+`DevForgeOrdersServiceUnavailable`
+
+The alert monitors the number of available Orders Service deployment replicas.
+
+It fires when the deployment has fewer than one available replica for more than one minute.
+
+Alert severity: `critical`
+
+### Controlled Alert Testing
+
+The alert was tested by deliberately scaling the Orders Service deployment to zero replicas.
+
+The test confirmed:
+
+- Prometheus detected the unavailable deployment.
+- The alert transitioned to the firing state.
+- Alertmanager processed the notification.
+- The firing notification was successfully delivered to the configured Slack channel.
+- After restoring the deployment to three replicas, Kubernetes reported all three replicas available.
+- Prometheus subsequently showed the alert as inactive.
+
+This demonstrated alert detection, notification delivery, and recovery monitoring.
+
+## Slack Alert Notifications
+
+Alertmanager is configured to send application alert notifications to a dedicated Slack channel:
+
+`#devforge-alerts`
+
+Configuration files:
+
+- `monitoring/alertmanager/alertmanager.yaml`
+- `monitoring/alertmanager/slack-values.yaml`
+
+The integration uses:
+
+- Slack Incoming Webhooks.
+- Kubernetes Secrets for sensitive webhook and configuration data.
+- Alertmanager receiver and routing configuration.
+- Helm configuration to integrate the Slack settings with the Prometheus monitoring stack.
+
+The Slack webhook URL is stored in a Kubernetes Secret rather than committed to the Git repository.
+
+Alertmanager is configured with `send_resolved: true` to support recovery notifications.
+
+The firing notification delivery was verified during the controlled alert test. Recovery was confirmed in Prometheus; a distinct resolved notification in Slack has not been independently verified.
+
+## Terraform Status
+
+The `terraform/` directory provides an Infrastructure as Code foundation.
+
+It currently contains Terraform configuration scaffolding, application-related variables, provider configuration, and local environment structure.
+
+The configuration has passed Terraform formatting and validation checks.
+
+However, the current configuration does not provision cloud infrastructure. No deployed AWS, Azure, or GCP infrastructure should be inferred from this scaffold.
+
+Application delivery and Kubernetes deployment are currently managed through Helm and Argo CD.
+
 ## Current Limitations and Next Steps
 
 - Orders are stored in application memory rather than a persistent database.
-- HPA scale-up has been demonstrated under controlled load. Further validation of scale-down behaviour remains outstanding.
-- Alertmanager is deployed, but application-specific alert rules and notification delivery have not yet been demonstrated.
-- Terraform infrastructure provisioning is not implemented; the current Terraform directory remains a scaffold.
+- HPA scale-up has been demonstrated under controlled load; further validation of scale-down behaviour remains outstanding.
+- A distinct Slack recovery notification has not yet been independently verified.
+- Terraform infrastructure provisioning is not implemented.
 - Argo CD synchronization is manual.
+- Container vulnerability scanning has not yet been integrated.
 
 ### Future Improvements
 
 - Implement persistent database storage.
-- Demonstrate horizontal autoscaling under load.
-- Configure application-specific alert rules and notification delivery.
-- Add container vulnerability scanning.
+- Validate HPA scale-down behaviour.
+- Verify distinct Slack recovery notifications.
 - Implement Terraform-managed infrastructure.
+- Add container vulnerability scanning.
+- Explore automated GitOps synchronization.
 
 ## Engineering Principles
 
-- Automation over repetitive manual work
-- Immutable, traceable container images
-- GitOps-based deployment management
-- Least-privilege container security
-- Resource limits and health checks
-- Clear operational procedures and honest verification of results
+- Automation over repetitive manual work.
+- Immutable, traceable container images.
+- GitOps-based deployment management.
+- Least-privilege container security.
+- Resource limits and health checks.
+- Observability-driven operations.
+- Secure handling of application secrets.
+- Clear operational procedures and honest verification of results.
